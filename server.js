@@ -8,7 +8,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 import express from 'express';
+import helmet from 'helmet';
 import cors from 'cors';
+import { rateLimit } from 'express-rate-limit';
 import { connectDB } from './database/db.js';
 import userRouter from './routes/user.route.js';
 import cardRouter from './routes/card.route.js';
@@ -19,6 +21,28 @@ import orderRouter from './routes/order.route.js';
 import paymentRouter from './routes/payment.route.js';
 
 const app = express();
+
+// Rate Limiting
+const generalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per windowMs
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: 'Too many requests from this IP, please try again after 15 minutes'
+});
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10, // Limit each IP to 10 requests per windowMs for auth routes
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: 'Too many authentication attempts, please try again after 15 minutes'
+});
+
+app.use(generalLimiter);
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" }
+}));
 connectDB();
 
 // 🚀 Production-Safe CORS with Preflight Support
@@ -58,7 +82,7 @@ app.get('/health', (req, res) => {
 });
 
 // API routes
-app.use('/api/users', userRouter);
+app.use('/api/users', authLimiter, userRouter);
 app.use('/api/cards', cardRouter);
 app.use('/api/admin', adminRouter);
 app.use('/api/offers', offerCardRouter);

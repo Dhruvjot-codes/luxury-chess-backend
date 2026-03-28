@@ -1,6 +1,7 @@
 import jwt from 'jsonwebtoken';
 import bcryptjs from 'bcryptjs';
 import { sendOTPEmail } from './sendMail.js';
+import { User } from '../models/user.model.js';
 
 // configuration constants - reuse across middleware and controller
 export const OTP_LENGTH = 6;
@@ -27,6 +28,12 @@ export const requestOTP = async (req, res, next) => {
       return res.status(400).json({ message: 'All fields are required' });
     }
 
+    // Check if user already exists
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+        return res.status(400).json({ message: 'User already exists with this email' });
+    }
+
     // OTP generation / expiration
     const otp = generateOTP();
     const otpExpiresAt = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
@@ -47,7 +54,6 @@ export const requestOTP = async (req, res, next) => {
     const mailResult = await sendOTPEmail(email, otp, username);
     if (!mailResult.success) {
       console.error('requestOTP middleware failed to send OTP:', mailResult.error);
-      // return error details to client for easier troubleshooting (remove in prod)
       return res.status(500).json({ message: 'Failed to send OTP email', error: mailResult.error });
     }
 
