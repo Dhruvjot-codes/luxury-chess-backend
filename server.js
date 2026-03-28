@@ -44,7 +44,7 @@ app.use(cors({
 }));
 
 // HANDLE PREFLIGHT (CRITICAL FOR OPTIONS REQUESTS)
-app.options('*', cors());
+app.options('(.*)', cors());
 
 
 app.use(express.json());
