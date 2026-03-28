@@ -30,21 +30,12 @@ const allowedOrigins = [
 ].filter(Boolean);
 
 app.use(cors({
-  origin: (origin, callback) => {
-    // allow requests with no origin (like mobile apps)
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(null, true); // Allow all during troubleshooting
-    }
-  },
+  origin: true, // reflect origin back to client to solve CORS blocks
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept"],
-  credentials: true
+  credentials: true,
+  optionsSuccessStatus: 200
 }));
-
-// HANDLE PREFLIGHT (CRITICAL FOR OPTIONS REQUESTS)
-app.options('(.*)', cors());
 
 
 app.use(express.json());
