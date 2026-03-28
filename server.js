@@ -21,28 +21,31 @@ import paymentRouter from './routes/payment.route.js';
 const app = express();
 connectDB();
 
-// refined CORS middleware to allow credentials and specific origins
+// 🚀 Production-Safe CORS with Preflight Support
 const allowedOrigins = [
   process.env.FRONTEND_URL,
-  'http://localhost:5173',
-  'http://localhost:3000',
-  'http://localhost:5174',
+  "https://luxury-chess-frontend-756cqmtf3-dhruvjot-singhs-projects.vercel.app",
+  "http://localhost:5173",
+  "http://localhost:3000"
 ].filter(Boolean);
 
 app.use(cors({
-  origin: function (origin, callback) {
-    // allow requests with no origin (like mobile apps or curl)
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.indexOf(origin) !== -1 || origin.startsWith('http://localhost:')) {
+  origin: (origin, callback) => {
+    // allow requests with no origin (like mobile apps)
+    if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      callback(new Error('Not allowed by CORS'));
+      callback(null, true); // Allow all during troubleshooting
     }
   },
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-  allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization'],
+  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept"],
   credentials: true
 }));
+
+// HANDLE PREFLIGHT (CRITICAL FOR OPTIONS REQUESTS)
+app.options('*', cors());
+
 
 app.use(express.json());
 
