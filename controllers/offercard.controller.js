@@ -1,6 +1,18 @@
 import { OfferCard } from '../models/offercard.model.js';
 import { uploadToCloudinary } from '../utils/cloudinary.js';
 
+// Normalize date strings into proper Date objects cross-browser
+const parseSafeDate = (dateStr) => {
+  if (!dateStr) return null;
+  // Handle DD-MM-YYYY or other common formats by attempting standard parsing
+  let d = new Date(dateStr);
+  if (isNaN(d.getTime())) {
+    // try replacing dashes with slashes which often helps older parsers
+    d = new Date(dateStr.replace(/-/g, '/'));
+  }
+  return isNaN(d.getTime()) ? null : d;
+};
+
 // Create a new offer card (admin only)
 export const createOfferCard = async (req, res) => {
   try {
@@ -12,35 +24,47 @@ export const createOfferCard = async (req, res) => {
       });
     }
 
-    // Validate discount percentage
-    if (discountPercentage < 0 || discountPercentage > 100) {
+    // Attempt safe date parsing
+    const start = parseSafeDate(startDate);
+    const end = parseSafeDate(endDate);
+
+    if (!start || !end) {
       return res.status(400).json({ 
-        message: 'Discount percentage must be between 0 and 100' 
+        message: 'Invalid date format. Please use YYYY-MM-DD or MM/DD/YYYY' 
       });
     }
 
-    // Validate dates
-    const start = new Date(startDate);
-    const end = new Date(endDate);
     if (end <= start) {
       return res.status(400).json({ 
         message: 'End date must be after start date' 
       });
     }
 
+    // Validate discount percentage
+    const discount = Number(discountPercentage);
+    if (isNaN(discount) || discount < 0 || discount > 100) {
+      return res.status(400).json({ 
+        message: 'Discount percentage must be a number between 0 and 100' 
+      });
+    }
+
     // Upload photo to Cloudinary if available
     let photoUrl = null;
     if (req.file) {
-      const result = await uploadToCloudinary(req.file.buffer, 'offers');
-      photoUrl = result.secure_url;
-      console.log('Offer card photo uploaded to Cloudinary:', photoUrl);
+      try {
+        const result = await uploadToCloudinary(req.file.buffer, 'offers');
+        photoUrl = result.secure_url;
+      } catch (cloudinaryErr) {
+        console.error('Cloudinary upload failure:', cloudinaryErr);
+        return res.status(500).json({ message: 'Failed to upload image. Please check Cloudinary config.' });
+      }
     }
 
     const newOfferCard = new OfferCard({
       title,
       description,
       photo: photoUrl,
-      discountPercentage,
+      discountPercentage: discount,
       specialDays: specialDays || [],
       startDate: start,
       endDate: end,
@@ -55,8 +79,11 @@ export const createOfferCard = async (req, res) => {
       photoUrl: photoUrl,
     });
   } catch (error) {
-    console.error('Error in controller:', error);
-    res.status(500).json({ message: error.message || 'Internal server error' });
+    console.error('SERVER ERROR in createOfferCard:', error);
+    res.status(error.status || 500).json({ 
+      message: error.message || 'Internal server error',
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 };
 
