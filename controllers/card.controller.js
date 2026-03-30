@@ -1,4 +1,5 @@
 import { Card } from '../models/card.model.js';
+import { uploadToCloudinary } from '../utils/cloudinary.js';
 
 // create a new card (admin only)
 export const createCard = async (req, res) => {
@@ -9,18 +10,19 @@ export const createCard = async (req, res) => {
       return res.status(400).json({ message: 'Title, description, pricePerPiece and pieceCount are required' });
     }
 
-    // Get image path from uploaded file, or use provided image from body
-    let imagePath = null;
-    if (req.file) {
-      // File was uploaded - store the path relative to public folder
-      imagePath = `/uploads/${req.file.filename}`;
-      console.log('File uploaded:', imagePath);
+    // Handle multiple image uploads to Cloudinary
+    let imagePaths = [];
+    if (req.files && req.files.length > 0) {
+      const uploadPromises = req.files.map(file => uploadToCloudinary(file.buffer));
+      const results = await Promise.all(uploadPromises);
+      imagePaths = results.map(result => result.secure_url);
+      console.log(`${imagePaths.length} images uploaded to Cloudinary`);
     }
 
     const newCard = new Card({
       title,
       description,
-      image: imagePath, // store the file path
+      images: imagePaths, // store array of URLs
       pricePerPiece,
       pieceCount,
       woodType,
@@ -31,7 +33,7 @@ export const createCard = async (req, res) => {
     res.status(201).json({ 
       message: 'Card created successfully', 
       card: newCard,
-      imageUrl: imagePath,
+      images: imagePaths,
     });
   } catch (error) {
     console.error('Error in createCard:', error);
@@ -69,10 +71,12 @@ export const updateCard = async (req, res) => {
     const { id } = req.params;
     const updates = { ...req.body };
 
-    // If a new file was uploaded, update the image path
-    if (req.file) {
-      updates.image = `/uploads/${req.file.filename}`;
-      console.log('Card image updated:', updates.image);
+    // If new files were uploaded, update the images array
+    if (req.files && req.files.length > 0) {
+      const uploadPromises = req.files.map(file => uploadToCloudinary(file.buffer));
+      const results = await Promise.all(uploadPromises);
+      updates.images = results.map(result => result.secure_url);
+      console.log('Card images updated on Cloudinary');
     }
 
     const card = await Card.findByIdAndUpdate(id, updates, { new: true });
@@ -81,7 +85,7 @@ export const updateCard = async (req, res) => {
     res.status(200).json({ 
       message: 'Card updated successfully', 
       card,
-      imageUrl: card.image,
+      images: card.images,
     });
   } catch (error) {
     console.error('Error in updateCard:', error);

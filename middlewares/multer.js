@@ -14,18 +14,8 @@ if (!fs.existsSync(uploadsDir)) {
   console.log('Uploads directory created at:', uploadsDir);
 }
 
-// Configure storage with uuid for unique filenames
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadsDir);
-  },
-  filename: (req, file, cb) => {
-    const uniqueId = uuidv4();
-    const ext = path.extname(file.originalname);
-    const filename = `${file.fieldname}-${uniqueId}${ext}`;
-    cb(null, filename);
-  },
-});
+// Configure memory storage for Cloudinary upload
+const storage = multer.memoryStorage();
 
 // File filter for images and videos only
 const fileFilter = (req, file, cb) => {
@@ -60,7 +50,7 @@ const upload = multer({
 export const uploadSingleFile = upload.single('file');
 
 // Middleware to handle multiple file uploads
-export const uploadMultipleFiles = upload.array('files', 5);
+export const uploadMultipleFiles = upload.array('files', 10);
 
 // Error handler wrapper for multer
 export const multerErrorHandler = (err, req, res, next) => {

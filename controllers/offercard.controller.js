@@ -1,4 +1,5 @@
 import { OfferCard } from '../models/offercard.model.js';
+import { uploadToCloudinary } from '../utils/cloudinary.js';
 
 // Create a new offer card (admin only)
 export const createOfferCard = async (req, res) => {
@@ -27,17 +28,18 @@ export const createOfferCard = async (req, res) => {
       });
     }
 
-    // Get photo path from uploaded file if available
-    let photoPath = null;
+    // Upload photo to Cloudinary if available
+    let photoUrl = null;
     if (req.file) {
-      photoPath = `/uploads/${req.file.filename}`;
-      console.log('Offer card photo uploaded:', photoPath);
+      const result = await uploadToCloudinary(req.file.buffer, 'offers');
+      photoUrl = result.secure_url;
+      console.log('Offer card photo uploaded to Cloudinary:', photoUrl);
     }
 
     const newOfferCard = new OfferCard({
       title,
       description,
-      photo: photoPath,
+      photo: photoUrl,
       discountPercentage,
       specialDays: specialDays || [],
       startDate: start,
@@ -50,7 +52,7 @@ export const createOfferCard = async (req, res) => {
     res.status(201).json({ 
       message: 'Offer card created successfully', 
       offerCard: newOfferCard,
-      photoUrl: photoPath,
+      photoUrl: photoUrl,
     });
   } catch (error) {
     console.error('Error in controller:', error);
@@ -128,10 +130,11 @@ export const updateOfferCard = async (req, res) => {
       }
     }
 
-    // If a new file was uploaded, update the photo path
+    // If a new file was uploaded, update the photo URL using Cloudinary
     if (req.file) {
-      updates.photo = `/uploads/${req.file.filename}`;
-      console.log('Offer card photo updated:', updates.photo);
+      const result = await uploadToCloudinary(req.file.buffer, 'offers');
+      updates.photo = result.secure_url;
+      console.log('Offer card photo updated on Cloudinary:', updates.photo);
     }
 
     const offerCard = await OfferCard.findByIdAndUpdate(id, updates, { new: true });

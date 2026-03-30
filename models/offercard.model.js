@@ -11,7 +11,7 @@ const offerCardSchema = new mongoose.Schema({
     required: true,
   },
   photo: {
-    type: String, // file path from uploads folder
+    type: String, // Cloudinary URL
     required: false,
   },
   discountPercentage: {

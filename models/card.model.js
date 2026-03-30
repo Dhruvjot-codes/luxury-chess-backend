@@ -10,10 +10,10 @@ const cardSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
-  image: {
-    type: String, // url or base64 path
-    required: false,
-  },
+  images: [{
+    type: String,
+    required: true,
+  }],
   pricePerPiece: {
     type: Number,
     required: true,
