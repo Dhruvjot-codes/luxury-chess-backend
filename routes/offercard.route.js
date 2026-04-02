@@ -10,7 +10,7 @@ import {
 } from '../controllers/offercard.controller.js';
 import { isAuth, isAdmin } from '../middlewares/auth.js';
 import { asyncHandler } from '../middlewares/trycatch.js';
-import { uploadSingleFile, multerErrorHandler } from '../middlewares/multer.js';
+import { uploadMultipleFiles, multerErrorHandler } from '../middlewares/multer.js';
 
 const router = express.Router();
 
@@ -21,10 +21,10 @@ router.get('/:id', asyncHandler(getOfferCard));
 
 // Admin-protected endpoints (requires auth and admin role)
 // Create offer card with photo upload
-router.post('/', isAuth, isAdmin, uploadSingleFile, multerErrorHandler, asyncHandler(createOfferCard));
+router.post('/', isAuth, isAdmin, uploadMultipleFiles, multerErrorHandler, asyncHandler(createOfferCard));
 
 // Update offer card with optional photo upload
-router.put('/:id', isAuth, isAdmin, uploadSingleFile, multerErrorHandler, asyncHandler(updateOfferCard));
+router.put('/:id', isAuth, isAdmin, uploadMultipleFiles, multerErrorHandler, asyncHandler(updateOfferCard));
 
 // Delete offer card
 router.delete('/:id', isAuth, isAdmin, asyncHandler(deleteOfferCard));

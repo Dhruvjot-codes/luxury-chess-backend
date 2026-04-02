@@ -28,6 +28,56 @@ const cardSchema = new mongoose.Schema({
     type: String,
     required: false,
   },
+  discountPercentage: {
+    type: Number,
+    default: 0,
+    min: 0,
+    max: 100,
+  },
+  material: {
+    type: String,
+    required: false,
+  },
+  dimensions: {
+    type: String,
+    required: false,
+  },
+  inTheBox: {
+    type: String, // "you are getting"
+    required: false,
+  },
+  weight: {
+    type: String,
+    required: false,
+  },
+  suitableFor: {
+    type: String, // "suitable for chess piece"
+    required: false,
+  },
+  note: {
+    type: String,
+    required: false,
+  },
+  disclaimer: {
+    type: String,
+    required: false,
+  },
+  shippingInfo: {
+    type: String,
+    required: false,
+  },
+  deliveryPrice: {
+    type: String,
+    required: false,
+  },
+  warrantyInfo: {
+    type: String,
+    required: false,
+  },
+  securePaymentInfo: {
+    type: String,
+    required: false,
+  },
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',

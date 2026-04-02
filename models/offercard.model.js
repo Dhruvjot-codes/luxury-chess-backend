@@ -10,10 +10,10 @@ const offerCardSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
-  photo: {
-    type: String, // Cloudinary URL
+  images: [{
+    type: String, // Cloudinary URLs
     required: false,
-  },
+  }],
   discountPercentage: {
     type: Number,
     required: true,

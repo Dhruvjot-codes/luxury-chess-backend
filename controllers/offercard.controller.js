@@ -48,22 +48,24 @@ export const createOfferCard = async (req, res) => {
       });
     }
 
-    // Upload photo to Cloudinary if available
-    let photoUrl = null;
-    if (req.file) {
+    // Upload multiple photos to Cloudinary if available
+    let imagePaths = [];
+    if (req.files && req.files.length > 0) {
       try {
-        const result = await uploadToCloudinary(req.file.buffer, 'offers');
-        photoUrl = result.secure_url;
+        const uploadPromises = req.files.map(file => uploadToCloudinary(file.buffer, 'offers'));
+        const results = await Promise.all(uploadPromises);
+        imagePaths = results.map(result => result.secure_url);
+        console.log(`${imagePaths.length} offer images uploaded to Cloudinary`);
       } catch (cloudinaryErr) {
         console.error('Cloudinary upload failure:', cloudinaryErr);
-        return res.status(500).json({ message: 'Failed to upload image. Please check Cloudinary config.' });
+        return res.status(500).json({ message: 'Failed to upload images. Please check Cloudinary config.' });
       }
     }
 
     const newOfferCard = new OfferCard({
       title,
       description,
-      photo: photoUrl,
+      images: imagePaths,
       discountPercentage: discount,
       specialDays: specialDays || [],
       startDate: start,
@@ -76,7 +78,7 @@ export const createOfferCard = async (req, res) => {
     res.status(201).json({ 
       message: 'Offer card created successfully', 
       offerCard: newOfferCard,
-      photoUrl: photoUrl,
+      images: imagePaths,
     });
   } catch (error) {
     console.error('SERVER ERROR in createOfferCard:', error);
@@ -157,12 +159,42 @@ export const updateOfferCard = async (req, res) => {
       }
     }
 
-    // If a new file was uploaded, update the photo URL using Cloudinary
-    if (req.file) {
-      const result = await uploadToCloudinary(req.file.buffer, 'offers');
-      updates.photo = result.secure_url;
-      console.log('Offer card photo updated on Cloudinary:', updates.photo);
+    // Handle images
+    let finalImages = [];
+    
+    // 1. Keep existing images (if passed as an array or JSON string)
+    if (req.body.existingImages) {
+      try {
+        finalImages = typeof req.body.existingImages === 'string' 
+          ? JSON.parse(req.body.existingImages) 
+          : req.body.existingImages;
+      } catch (e) {
+        // if not JSON, assume it's a single string or already an array
+        finalImages = Array.isArray(req.body.existingImages) 
+          ? req.body.existingImages 
+          : [req.body.existingImages];
+      }
+    } else if (!req.files || req.files.length === 0) {
+      // If no new files and no existingImages specified, keep the old ones from DB
+      const currentOffer = await OfferCard.findById(id);
+      if (currentOffer) finalImages = currentOffer.images;
     }
+
+    // 2. Upload and add new files
+    if (req.files && req.files.length > 0) {
+      try {
+        const uploadPromises = req.files.map(file => uploadToCloudinary(file.buffer, 'offers'));
+        const results = await Promise.all(uploadPromises);
+        const newImagePaths = results.map(result => result.secure_url);
+        finalImages = [...finalImages, ...newImagePaths];
+        console.log('Offer card images updated on Cloudinary');
+      } catch (cloudinaryErr) {
+        console.error('Cloudinary update failure:', cloudinaryErr);
+        return res.status(500).json({ message: 'Failed to update images.' });
+      }
+    }
+
+    updates.images = finalImages;
 
     const offerCard = await OfferCard.findByIdAndUpdate(id, updates, { new: true });
     if (!offerCard) {
@@ -172,7 +204,7 @@ export const updateOfferCard = async (req, res) => {
     res.status(200).json({ 
       message: 'Offer card updated successfully', 
       offerCard,
-      photoUrl: offerCard.photo,
+      images: offerCard.images,
     });
   } catch (error) {
     console.error('Error in controller:', error);
