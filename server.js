@@ -19,6 +19,7 @@ import offerCardRouter from './routes/offercard.route.js';
 import reviewRouter from './routes/review.route.js';
 import orderRouter from './routes/order.route.js';
 import paymentRouter from './routes/payment.route.js';
+import settingsRouter from './routes/settings.route.js';
 
 const app = express();
 
@@ -89,6 +90,7 @@ app.use('/api/offers', offerCardRouter);
 app.use('/api/reviews', reviewRouter);
 app.use('/api/orders', orderRouter);
 app.use('/api/payments', paymentRouter);
+app.use('/api/settings', settingsRouter);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
