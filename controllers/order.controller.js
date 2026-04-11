@@ -51,17 +51,39 @@ export const acceptOrderRequest = async (req, res) => {
 
     if (orderReq.status !== 'pending') return res.status(400).json({ message: 'Order request already processed' });
 
-    // create order with price derived from card
+    // Calculate price with discount
     const itemPrice = orderReq.card.pricePerPiece;
-    const totalAmount = itemPrice * orderReq.quantity;
+    const discountPercentage = orderReq.card.discountPercentage || 0;
+    const discountedPrice = Math.floor(itemPrice * (1 - (discountPercentage / 100)));
+    const totalAmount = discountedPrice * orderReq.quantity;
+
+    // Auto-generate tracking number
+    const timestamp = Date.now().toString().slice(-6);
+    const random = Math.random().toString(36).substring(2, 8).toUpperCase();
+    const trackingNumber = `LCS-${timestamp}-${random}`;
 
     const order = await Order.create({
       user: orderReq.user,
-      items: [{ card: orderReq.card._id, quantity: orderReq.quantity, pricePerPiece: itemPrice }],
+      items: [{ card: orderReq.card._id, quantity: orderReq.quantity, pricePerPiece: discountedPrice }],
       totalAmount,
-      status: 'pending',
-      orderHistory: [{ status: 'pending', note: 'Order created and awaiting payment' }]
+      status: 'accepted',
+      trackingNumber,
+      orderHistory: [
+        { status: 'accepted', note: 'Order accepted by admin' },
+        { status: 'pending', note: 'Awaiting customer payment' }
+      ]
     });
+
+    // Auto-deduct stock from card
+    const updatedCard = await Card.findByIdAndUpdate(
+      orderReq.card._id,
+      { $inc: { pieceCount: -orderReq.quantity } },
+      { new: true }
+    );
+
+    if (updatedCard && updatedCard.pieceCount < 0) {
+      return res.status(400).json({ message: 'Insufficient stock available' });
+    }
 
     // mark request as accepted
     orderReq.status = 'accepted';
@@ -70,8 +92,17 @@ export const acceptOrderRequest = async (req, res) => {
     // Send order confirmation email
     await sendOrderConfirmationEmail(order, orderReq.user);
 
+    // Send admin notification
+    await sendAdminNotificationEmail('Order Accepted', `Order ${order._id} with tracking ${trackingNumber} has been created. Stock deducted: ${orderReq.quantity} units`, order);
+
     // return created order so frontend can proceed to payment
-    res.status(201).json({ message: 'Order created', order });
+    res.status(201).json({ 
+      message: 'Order accepted and created successfully',
+      success: true,
+      order,
+      trackingNumber,
+      remainingStock: updatedCard.pieceCount
+    });
   } catch (err) {
     console.error('Error acceptOrderRequest:', err);
     res.status(500).json({ message: 'Internal server error' });
@@ -104,11 +135,22 @@ export const getUserOrderRequests = async (req, res) => {
 export const rejectOrderRequest = async (req, res) => {
   try {
     const { id } = req.params;
-    const reqDoc = await OrderRequest.findById(id);
+    const reqDoc = await OrderRequest.findById(id).populate('user').populate('card');
     if (!reqDoc) return res.status(404).json({ message: 'Order request not found' });
+    
     reqDoc.status = 'rejected';
     await reqDoc.save();
-    res.status(200).json({ message: 'Order request rejected' });
+    
+    // Send rejection email to user
+    if (reqDoc.user && reqDoc.user.email) {
+      await sendAdminNotificationEmail('Order Rejected', `Your order request for ${reqDoc.card?.title} has been rejected. Please contact support if you have questions.`, reqDoc);
+    }
+    
+    res.status(200).json({ 
+      message: 'Order request rejected successfully',
+      success: true,
+      orderRequest: reqDoc
+    });
   } catch (err) {
     console.error('Error rejectOrderRequest:', err);
     res.status(500).json({ message: 'Internal server error' });
@@ -253,6 +295,83 @@ export const updateOrderStatus = async (req, res) => {
   } catch (err) {
     console.error('Error updating order status:', err);
     res.status(500).json({ message: 'Failed to update order status' });
+  }
+};
+
+// User: cancel order (only before payment)
+export const cancelOrder = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const order = await Order.findById(id).populate('user');
+    
+    if (!order) return res.status(404).json({ message: 'Order not found' });
+
+    // Check if user owns this order
+    if (order.user._id.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+
+    // Can only cancel pending or accepted orders (not paid/processing/shipped/delivered)
+    if (!['pending', 'created', 'accepted'].includes(order.status)) {
+      return res.status(400).json({ message: `Cannot cancel order with status: ${order.status}` });
+    }
+
+    // Update order status
+    order.status = 'cancelled';
+    order.orderHistory.push({
+      status: 'cancelled',
+      timestamp: new Date(),
+      note: 'Order cancelled by customer'
+    });
+
+    await order.save();
+
+    // Send cancellation email
+    await sendShippingUpdateEmail(order, order.user, 'cancelled');
+
+    // Send admin notification
+    await sendAdminNotificationEmail('Order Cancelled', `Order ${order._id} has been cancelled by customer`, order);
+
+    res.status(200).json({ message: 'Order cancelled successfully', order });
+  } catch (err) {
+    console.error('Error cancelling order:', err);
+    res.status(500).json({ message: 'Failed to cancel order' });
+  }
+};
+
+// Admin: cancel order directly
+export const cancelOrderByAdmin = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const order = await Order.findById(id).populate('user');
+    if (!order) return res.status(404).json({ message: 'Order not found' });
+
+    if (order.status === 'cancelled') {
+      return res.status(400).json({ message: 'Order is already cancelled' });
+    }
+
+    if (order.status === 'delivered') {
+      return res.status(400).json({ message: 'Delivered orders cannot be cancelled' });
+    }
+
+    order.status = 'cancelled';
+    order.orderHistory.push({
+      status: 'cancelled',
+      timestamp: new Date(),
+      note: 'Order cancelled by admin'
+    });
+
+    await order.save();
+
+    if (order.user) {
+      await sendShippingUpdateEmail(order, order.user, 'cancelled');
+    }
+    await sendAdminNotificationEmail('Order Cancelled', `Order ${order._id} was cancelled by admin`, order);
+
+    res.status(200).json({ message: 'Order cancelled successfully by admin', order });
+  } catch (err) {
+    console.error('Error cancelling order by admin:', err);
+    res.status(500).json({ message: 'Failed to cancel order' });
   }
 };
 

@@ -11,7 +11,9 @@ import {
   updateOrderStatus,
   getOrderDetails,
   createRazorpayPayment,
-  verifyRazorpayPayment
+  verifyRazorpayPayment,
+  cancelOrder,
+  cancelOrderByAdmin
 } from '../controllers/order.controller.js';
 
 const router = express.Router();
@@ -34,11 +36,17 @@ router.post('/admin/:id/accept', isAuth, isAdmin, asyncHandler(acceptOrderReques
 // Admin: reject request
 router.post('/admin/:id/reject', isAuth, isAdmin, asyncHandler(rejectOrderRequest));
 
+// Admin: cancel order directly
+router.post('/admin/:id/cancel', isAuth, isAdmin, asyncHandler(cancelOrderByAdmin));
+
 // User: get order details with tracking
 router.get('/:id', isAuth, asyncHandler(getOrderDetails));
 
 // Admin: update order status
 router.put('/admin/:id/status', isAuth, isAdmin, asyncHandler(updateOrderStatus));
+
+// User: cancel order (only before payment)
+router.post('/:id/cancel', isAuth, asyncHandler(cancelOrder));
 
 // Payment: create Razorpay order for full payment
 router.post('/:id/create-payment', isAuth, asyncHandler(createRazorpayPayment));
